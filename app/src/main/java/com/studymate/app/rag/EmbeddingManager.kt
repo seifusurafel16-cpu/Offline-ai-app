@@ -64,10 +64,10 @@ class EmbeddingManager(private val context: Context) {
     /** Embed a single piece of text. Returns null if the model produced no embedding. */
     suspend fun embed(text: String): FloatArray? = withContext(Dispatchers.IO) {
         ensureLoaded()
-        val result = embedder?.embed(text)?.embeddingResult() ?: return@withContext null
-        result.embeddings().firstOrNull()?.let { emb ->
-            emb.floatEmbedding().takeIf { it.isNotEmpty() }?.toFloatArray()
-        }
+        val embedder = embedder ?: return@withContext null
+        // MediaPipe 0.10.14: embed() is synchronous and returns TextEmbedderResult.
+        val result = embedder.embed(text).embeddingResult()
+        result.embeddings().firstOrNull()?.floatEmbedding()?.takeIf { it.isNotEmpty() }
     }
 
     fun close() {

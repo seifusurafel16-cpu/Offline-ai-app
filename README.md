@@ -255,15 +255,20 @@ cd Offline-ai-app
 # → app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-On first run Gradle will generate the Gradle wrapper jar (`gradlew`) automatically if you
-opened the project in Android Studio. If you build from CLI without the wrapper jar, run
-`gradle wrapper --gradle-version 8.7` once (with a system Gradle) to materialize it.
+On first run Gradle will download the distribution and all dependencies (internet needed
+on the **build machine only**; the produced app is 100% offline). The `gradlew` launcher
+and `gradle/wrapper/gradle-wrapper.jar` are committed, so no `gradle wrapper` step is needed.
 
-### 4.3 Verify the size limit
+### 4.3 Verify the size limit & offline status
 ```bash
-ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
-# Must be < 500 MB. With the embedding model (~25 MB) bundled and the LLM sideloaded,
-# the APK is typically well under 50 MB.
+# APK size — must be < 500 MB:
+ls -lh app/build/outputs/apk/debug/app-debug.apk
+# ~90 MB (native libs for MediaPipe LLM engine + ML Kit OCR + text embedder across ABIs).
+# The LLM itself (~670 MB) is NOT in the APK — it is sideloaded (§3.2).
+
+# Confirm NO network permissions in the merged manifest (offline enforcement):
+$ANDROID_HOME/build-tools/34.0.0/aapt dump permissions app/build/outputs/apk/debug/app-debug.apk
+# Should list ONLY READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE — no INTERNET.
 ```
 
 ## 5. Run & test

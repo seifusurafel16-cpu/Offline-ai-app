@@ -197,8 +197,8 @@ fun StudyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Ask about the document") },
                         maxLines = 4,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Ask),
-                        keyboardActions = KeyboardActions(onAsk = {
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
                             viewModel.askQuestion(question)
                             keyboard?.hide()
                         })

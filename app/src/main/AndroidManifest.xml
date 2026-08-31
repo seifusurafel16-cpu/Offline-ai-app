@@ -13,6 +13,18 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!--
+        Strip network permissions that ML Kit / MediaPipe pull in transitively.
+        The app MUST be 100% offline, so INTERNET and ACCESS_NETWORK_STATE are removed
+        from the merged manifest regardless of what dependencies declare.
+    -->
+    <uses-permission
+        android:name="android.permission.INTERNET"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+
     <application
         android:name=".StudyMateApp"
         android:allowBackup="true"
