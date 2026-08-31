@@ -41,3 +41,54 @@ The app must have a modern, clean interface with a bottom navigation bar contain
 6. Provide a detailed `README.md` explaining how to download the specific quantized model files, place them in the assets folder, and build the APK.
 
 **Strict Instruction:** Do not give me placeholder code or half-finished implementations. Provide the full, functional code for every component. If a step is too large, break it down logically and continue until the app is fully functional.
+
+
+# StudyMate - Offline Educational AI Assistant (Android)
+
+## 📱 Project Overview
+StudyMate is a fully offline Android application designed for low-end devices (1GB RAM). It serves as a personalized educational assistant that can read uploaded PDF/TXT study materials and answer questions based on them. It also acts as a standard offline Chatbot for general questions.
+
+## 🚀 Core Features
+
+### 1. "Study Assistant" Mode (RAG Pipeline)
+- Users can upload **PDF** or **TXT** files from local storage.
+- The app extracts text using **Google ML Kit**.
+- Text is split into chunks and embedded into a local **Vector Database (SQLite-VSS)**.
+- Users can ask questions; the system retrieves the most relevant chunks and generates answers based *only* on the uploaded document.
+
+### 2. "Chat" Mode (General Conversation)
+- Standard chat interface for general questions.
+- The AI uses its pre-trained knowledge to respond.
+
+## 📊 Critical Technical Constraints (Must Be Observed)
+- **Offline:** The app must run 100% offline. No cloud API calls.
+- **APK Size Limit:** Must not exceed **500 MB**.
+- **RAM Limit:** Must run smoothly on devices with only **1 GB of RAM**.
+- **Tech Stack:** Kotlin, Jetpack Compose, Google ML Kit, MediaPipe LLM Inference (or TFLite).
+- **Model:** Pre-trained quantized model (e.g., TinyLlama 1.1B or Qwen2.5-1.5B quantized to 4-bit). No training from scratch.
+
+## 🏗️ Project Structure (Expected)
+- `app/src/main/java/...` (Kotlin code for UI, RAG, and Chat)
+- `app/src/main/assets/` (Folder for the quantized `.gguf` or `.tflite` model files)
+- `app/build.gradle` (Dependencies)
+
+## 📥 Model Setup Instructions
+1. Download a quantized model (e.g., **TinyLlama 1.1B Q4_K_M.gguf**) from Hugging Face or the official source.
+2. Place the model file inside `app/src/main/assets/`.
+3. Ensure the app references the model file name correctly in the code to initialize the LLM.
+
+## 🛠️ Development Guidelines for AI Agent (OpenHands)
+- **Step 1:** Set up the Android project structure (Gradle files, Manifest, Theme).
+- **Step 2:** Implement the UI with Jetpack Compose (Two Tabs: "Chat" and "Study Assistant").
+- **Step 3:** Implement the text extraction module using Google ML Kit.
+- **Step 4:** Implement the RAG pipeline (Chunking, Embedding, Vector Database indexing).
+- **Step 5:** Implement the LLM loading and inference logic (with lazy loading to save RAM).
+- **Step 6:** Connect the UI to the backend logic and ensure error handling.
+- **Step 7:** Write clear comments and provide a build guide.
+
+## ⚠️ Important Notes
+- **Memory Management:** To prevent OutOfMemory (OOM) errors on 1GB RAM devices, the LLM must be loaded lazily (only when a chat is active) and unloaded when the app goes to the background.
+- **Bilingual Support:** UI labels must be in English, but the model must be prompted to handle both English and Amharic questions.
+- **Error Handling:** Ensure the app handles missing model files or failed PDF parsing gracefully.
+
+---
