@@ -1,5 +1,7 @@
 # Built application files
 *.apk
+# Allow the released APK shipped inside the apk/ folder.
+!apk/*.apk
 *.aar
 *.ap_
 *.aab
