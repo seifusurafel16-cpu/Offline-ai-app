@@ -319,6 +319,15 @@ PromptBuilder.ragPrompt(question, context)  ──LlmManager.generate──▶  
 - **"No LLM model found" banner** — the LLM file from §3.2 is missing or misnamed. Check
   `ModelLoader.CANDIDATES` for the exact accepted file names and confirm the file is in
   `/data/data/com.studymate.app/files/models/` (`adb shell run-as com.studymate.app ls files/models`).
+- **App crashes immediately on launch ("keeps stopping")** — this is almost always a
+  startup-time initializer failure on a specific device. This build prevents it by making
+  every heavy component lazy (Room DB, ML Kit recognizer, embedder, RAG service are NOT
+  built at process start) and wrapping the process-lifecycle observer, `enableEdgeToEdge()`,
+  and the Compose content in defensive try/catch. If it still crashes, capture the stack
+  trace: `adb logcat -d *:E AndroidRuntime:E | grep -i studymate` and look for a
+  `FATAL EXCEPTION`. The most common remaining cause on low-end phones is a 32-bit-only
+  device that has no arm64-v8a support — in that case LLM generation isn't possible, but
+  the app should still launch; share the logcat if it doesn't.
 - **App crashes with OOM on a 1 GB device** — ensure you are using a **1.1B** (not larger)
   4-bit model. TinyLlama 1.1B Q4_K_M is the recommended ceiling for 1 GB RAM. Close other
   apps before launching; the engine is freed on background so re-entry re-allocates.
