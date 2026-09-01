@@ -29,7 +29,11 @@ import java.io.FileOutputStream
  */
 class TextExtractor(private val context: Context) {
 
-    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    // Created on first OCR use (inside Dispatchers.IO), never at process start. ML Kit
+    // initialization pulls in native libraries; deferring it keeps app launch crash-free.
+    private val recognizer by lazy {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
 
     /**
      * @param onProgress optional callback receiving (currentPage, totalPages) for PDFs.

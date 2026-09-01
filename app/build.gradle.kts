@@ -60,6 +60,14 @@ android {
 }
 
 dependencies {
+    // Globally strip Google's datatransport telemetry backend (network-oriented, unused
+    // offline). text-recognition-bundled-common pulls it in transitively; removing the
+    // artifacts also drops the <service>/<receiver> manifest entries ML Kit's transport
+    // glue would otherwise add. The bundled OCR recognizer works without it.
+    configurations.all {
+        exclude(group = "com.google.android.datatransport")
+    }
+
     // --- Compose (BOM keeps versions aligned) ---
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
@@ -87,6 +95,9 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     // --- Google ML Kit: on-device text recognition (for PDF/image OCR) ---
+    // The BUNDLED recognizer model + native lib in text-recognition-bundled-common do the
+    // actual OCR and work 100% offline. The datatransport telemetry glue is excluded
+    // globally above (see configurations.all).
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
     // --- MediaPipe: on-device Text Embedder (RAG vectors) + GenAI LLM Inference ---
