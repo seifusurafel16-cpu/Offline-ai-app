@@ -92,3 +92,245 @@ StudyMate is a fully offline Android application designed for low-end devices (1
 - **Error Handling:** Ensure the app handles missing model files or failed PDF parsing gracefully.
 
 ---
+
+# StudyMate — Build & Model Setup Guide
+
+This section is the **operational guide** for the actual implementation in this repository.
+Read it end-to-end before building the APK.
+
+## 1. Requirements
+
+| Tool | Version |
+|------|---------|
+| Android Studio | Hedgehog (2023.1.1) or newer |
+| Gradle | 8.7 (bundled via the wrapper — no manual install needed) |
+| Android Gradle Plugin | 8.3.2 |
+| Kotlin | 1.9.24 |
+| JDK | 17 |
+| Android SDK | compileSdk 34, minSdk 24 |
+| Device for testing | Android 7.0+ (API 24), ≥ 1 GB RAM |
+
+> No internet permission is declared in the manifest. The app is **fully offline**; once the
+> models are on the device it never makes a network call.
+
+## 2. Project structure
+
+```
+Offline-ai-app/
+├─ settings.gradle.kts            # module graph + repositories
+├─ build.gradle.kts               # root: plugin versions
+├─ gradle.properties              # JVM/AndroidX flags
+├─ gradle/wrapper/                # Gradle 8.7 wrapper
+└─ app/
+   ├─ build.gradle.kts            # dependencies, KSP, Compose, R8
+   ├─ proguard-rules.pro          # MediaPipe / ML Kit keep rules
+   └─ src/main/
+      ├─ AndroidManifest.xml      # NO INTERNET permission (offline by design)
+      ├─ assets/
+      │   ├─ MODELS_README.txt    # where models go
+      │   └─ universal_sentence_encoder_quantized.tflite  ← you add this (§3.1)
+      ├─ res/                     # theme, colors, strings, launcher icon
+      └─ java/com/studymate/app/
+         ├─ MainActivity.kt        # single Activity host
+         ├─ StudyMateApp.kt        # Application: DI + lifecycle unload
+         ├─ data/                  # Room DB, entities, DAOs, repository, vector converters
+         ├─ rag/                   # TextExtractor (ML Kit), TextChunker, EmbeddingManager,
+         │                         #   VectorRetriever, PromptBuilder, RagService
+         ├─ llm/                   # ModelLoader, LlmManager (MediaPipe GenAI)
+         ├─ ui/                    # Compose theme, bottom-nav host
+         │   ├─ chat/              # ChatViewModel + ChatScreen
+         │   └─ study/             # StudyViewModel + StudyScreen
+         └─ util/                  # VectorMath (cosine), IoUtils
+```
+
+## 3. Download the models and place them in the app
+
+There are **two** models. Both must be present for the app to be fully functional.
+
+### 3.1 Embedding model (REQUIRED — small, ~25 MB, bundled in the APK)
+
+This drives the RAG vector embeddings.
+
+1. Download the **Universal Sentence Encoder** quantized TFLite model from the official
+   Google AI Edge / MediaPipe model storage:
+
+   ```
+   https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/latest/universal_sentence_encoder.tflite
+   ```
+
+   (A ~25 MB file. For an even smaller footprint you may use the `average_word_embedder`
+   model from the same bucket — see the MediaPipe text-embedder samples — but USE gives
+   better retrieval quality.)
+
+2. **Rename** the downloaded file to exactly:
+
+   ```
+   universal_sentence_encoder_quantized.tflite
+   ```
+
+3. Place it in:
+
+   ```
+   app/src/main/assets/universal_sentence_encoder_quantized.tflite
+   ```
+
+   The file name is hard-referenced in `EmbeddingManager.EMBEDDING_MODEL_NAME`; if you use
+   a different name, update that constant.
+
+### 3.2 LLM (REQUIRED — large, sideloaded via ADB, NOT in the APK)
+
+The 4-bit quantized LLM (~670 MB for TinyLlama 1.1B Q4_K_M) is **too large to bundle** —
+it would blow the 500 MB APK limit. Instead, sideload it onto the device's app-private
+storage at runtime. Two methods:
+
+#### Method A — Sideload via `adb` (recommended; keeps APK < 500 MB)
+
+1. Download **TinyLlama-1.1B-Chat-v1.0**, Q4_K_M quantized, in MediaPipe `.tflite` /
+   `.task` format. Recommended source:
+
+   - Hugging Face: `https://huggingface.co/litert-community/TinyLlama-1.1B-Chat-v1.0-litert-lm-qa`
+     → download the `*.task` or `*.tflite` 4-bit file.
+
+   You can instead use **Gemma-3n-E2B-it** (litert-community on Hugging Face) or
+   **Qwen2.5-1.5B-Instruct** quantized to 4-bit, provided the file is in MediaPipe LiteRT
+   format. TinyLlama 1.1B is the safest choice for a 1 GB-RAM device.
+
+2. Rename the file to one of the names recognized by `ModelLoader.CANDIDATES`, e.g.:
+
+   ```
+   TinyLlama-1.1B-Chat-v1.0.Q4_K_M.tflite
+   ```
+
+3. Push it into the app's private `filesDir/models/` directory. On a **debuggable** build
+   (this repo's `debug` variant is debuggable) you can use `run-as`:
+
+   ```bash
+   # From your host machine, with the device connected via adb:
+   adb push TinyLlama-1.1B-Chat-v1.0.Q4_K_M.tflite /data/local/tmp/
+
+   # Copy it into the app's private storage (debug builds only):
+   adb shell run-as com.studymate.app \
+     cp /data/local/tmp/TinyLlama-1.1B-Chat-v1.0.Q4_K_M.tflite \
+        /data/data/com.studymate.app/files/models/
+
+   # (On a rooted device or emulator you can push directly:
+   #  adb shell mkdir -p /data/data/com.studymate.app/files/models
+   #  adb push TinyLlama-1.1B-Chat-v1.0.Q4_K_M.tflite \
+   #     /data/data/com.studymate.app/files/models/ )
+   ```
+
+   `ModelLoader` checks `filesDir/models/` first, so no app change is needed.
+
+#### Method B — Bundle a small model in `assets/` (only if < ~450 MB)
+
+If you find a sufficiently small quantized LLM (e.g. a future sub-450 MB build), you may
+place it directly in `app/src/main/assets/`. `ModelLoader` will detect it there, copy it
+to `filesDir/models/` on first launch, and use it. The candidate file names are listed in
+`ModelLoader.CANDIDATES`. **Do not** do this with the 670 MB TinyLlama file or the APK
+will exceed 500 MB.
+
+> If no LLM file is present, the Chat tab shows a "No LLM model found" banner and the Study
+> tab's Q&A step returns an error — the app does not crash.
+
+## 4. Build the APK
+
+### 4.1 From Android Studio
+1. `File → Open…` and select the `Offline-ai-app` folder.
+2. Let Gradle sync (it will download the wrapper + dependencies — this needs internet on
+   the **build machine** only; the produced app is offline).
+3. Make sure the embedding model from §3.1 is in `app/src/main/assets/`.
+4. Select the `debug` variant and press **Run** ▶, or `Build → Build Bundle(s)/APK(s) → Build APK(s)`.
+
+### 4.2 From the command line
+```bash
+# (build host needs internet for dependency resolution only)
+cd Offline-ai-app
+
+# Debug APK:
+./gradlew assembleDebug
+# → app/build/outputs/apk/debug/app-debug.apk
+
+# Release APK (R8 + resource shrinking):
+./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+On first run Gradle will download the distribution and all dependencies (internet needed
+on the **build machine only**; the produced app is 100% offline). The `gradlew` launcher
+and `gradle/wrapper/gradle-wrapper.jar` are committed, so no `gradle wrapper` step is needed.
+
+### 4.3 Verify the size limit & offline status
+```bash
+# APK size — must be < 500 MB:
+ls -lh app/build/outputs/apk/debug/app-debug.apk
+# ~90 MB (native libs for MediaPipe LLM engine + ML Kit OCR + text embedder across ABIs).
+# The LLM itself (~670 MB) is NOT in the APK — it is sideloaded (§3.2).
+
+# Confirm NO network permissions in the merged manifest (offline enforcement):
+$ANDROID_HOME/build-tools/34.0.0/aapt dump permissions app/build/outputs/apk/debug/app-debug.apk
+# Should list ONLY READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE — no INTERNET.
+```
+
+## 5. Run & test
+
+1. Install the APK on a device/emulator (API 24+).
+2. Sideload the LLM per §3.2 (Method A).
+3. Open the app — you land on the **Chat** tab. Type a question (English or Amharic); the
+   answer streams in token-by-token.
+4. Switch to the **Study Assistant** tab → **Select PDF / TXT file** → pick a document.
+   The app extracts text (ML Kit OCR for PDFs), chunks, embeds, and indexes it; progress
+   is shown. Then ask a question about the document — the answer cites the source chunks.
+
+## 6. How the constraints are satisfied
+
+| Constraint | How it's met |
+|------------|--------------|
+| 100% offline | No `INTERNET` permission in manifest; ML Kit / MediaPipe / Room all run on-device. |
+| APK ≤ 500 MB | LLM (~670 MB) is **sideloaded via ADB**, not bundled. Only the ~25 MB embedding model is in `assets/`. |
+| Runs on 1 GB RAM | LLM engine is **lazy-loaded** on first query and **unloaded on background** via a `ProcessLifecycleOwner` observer (`StudyMateApp`). PDF pages are OCR'd one at a time with immediate bitmap recycling. Retrieval is a streaming cosine scan, not a resident index. 4-bit quantization keeps the model's RAM footprint at ~700 MB peak, freed the moment the app is backgrounded. |
+| Tech stack | Kotlin + Jetpack Compose (UI) + Google ML Kit Text Recognition (PDF/image OCR) + MediaPipe GenAI LLM Inference + MediaPipe Text Embedder. |
+| No custom training | Uses a pre-existing quantized LLM (TinyLlama 1.1B Q4_K_M, or Qwen2.5-1.5B Q4) as-is. |
+| Bilingual (English + Amharic) | UI labels are English; the system instruction in `PromptBuilder` tells the model to answer in the question's language. The chunker recognizes the Amharic sentence terminator `።`. |
+
+## 7. RAG pipeline — data flow
+
+```
+PDF/TXT  ──TextExtractor (PdfRenderer page→Bitmap→ML Kit OCR; or UTF-8 read)──▶  raw text
+   │
+   ▼
+TextChunker  (sentence-aware, 500-char chunks, 100-char overlap)  ──▶  List<Chunk>
+   │
+   ▼
+EmbeddingManager (MediaPipe TextEmbedder, L2-normalized)  ──▶  FloatArray per chunk
+   │
+   ▼
+Room (chunks table, embedding stored as BLOB via VectorConverters)  ◀── index complete
+   │
+   │  (query time)
+   ▼
+query embedding  ──VectorRetriever (cosine similarity, top-4)──▶  context chunks
+   │
+   ▼
+PromptBuilder.ragPrompt(question, context)  ──LlmManager.generate──▶  answer (+ sources)
+```
+
+## 8. Troubleshooting
+
+- **"No LLM model found" banner** — the LLM file from §3.2 is missing or misnamed. Check
+  `ModelLoader.CANDIDATES` for the exact accepted file names and confirm the file is in
+  `/data/data/com.studymate.app/files/models/` (`adb shell run-as com.studymate.app ls files/models`).
+- **App crashes with OOM on a 1 GB device** — ensure you are using a **1.1B** (not larger)
+  4-bit model. TinyLlama 1.1B Q4_K_M is the recommended ceiling for 1 GB RAM. Close other
+  apps before launching; the engine is freed on background so re-entry re-allocates.
+- **PDF yields no text** — the PDF may be image-only scans at very low resolution; the OCR
+  step still runs on each page. If pages are huge, lower `renderScale` in `TextExtractor`.
+- **Slow indexing** — embedding is CPU-bound; large PDFs (hundreds of pages) take minutes.
+  Progress is reported in the UI. Keep the screen on during indexing.
+
+## 9. License
+
+Source code in this repository is provided as-is for the StudyMate educational project.
+Third-party model weights retain the licenses of their respective publishers
+(TinyLlama → Apache-2.0; Qwen → Apache-2.0; Gemma → Gemma Terms of Use).
+
+---

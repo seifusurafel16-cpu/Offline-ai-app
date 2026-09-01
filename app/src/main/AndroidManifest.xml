@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Storage access: we use the Storage Access Framework (ACTION_OPEN_DOCUMENT) for
+        picking PDF/TXT files, which does NOT require storage permissions. READ_MEDIA_* is
+        declared only as a fallback path for legacy / direct-Uri rendering on some OEMs.
+        The app is fully offline — android.permission.INTERNET is intentionally NOT declared.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!--
+        Strip network permissions that ML Kit / MediaPipe pull in transitively.
+        The app MUST be 100% offline, so INTERNET and ACCESS_NETWORK_STATE are removed
+        from the merged manifest regardless of what dependencies declare.
+    -->
+    <uses-permission
+        android:name="android.permission.INTERNET"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+
+    <application
+        android:name=".StudyMateApp"
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_launcher"
+        android:supportsRtl="true"
+        android:largeHeap="false"
+        android:hardwareAccelerated="true"
+        android:theme="@style/Theme.StudyMate"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:targetApi="34">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.StudyMate"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
